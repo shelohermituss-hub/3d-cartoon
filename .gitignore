@@ -1,0 +1,6 @@
+# downloaded CC0 assets: re-download with scripts/build/fetch_polyhaven.py (list in CREDITS.md)
+assets/polyhaven/
+# intermediate renders
+renders/*_raw.png
+renders/tmp/
+__pycache__/
