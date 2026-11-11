@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 # ------------------------------------------------------------------ constants
-SS = 3                      # supersampling
+SS = int(os.environ.get('CHAR_SS', '3'))   # supersampling
 D = 400                     # head width on the canvas (px) = 1 unit
 CW, CH = 1100, 1700         # canvas
 INK = '#1a1c2e'
@@ -168,6 +168,12 @@ class Character:
         return cx, foot, hip, tb, tt, hcy, hh
 
     def draw(self, face=None, view='front', light=None, pose='rest'):
+        """pose: a name ('rest', 'carry', ...) or a dict: arms, legs ('stand'|'walk'|'run'|'tuck'), phase (0-1 per
+        full stride cycle), dir (+1 = moving to picture right), fx (['speed', 'sweat']), lean (degrees, + = back)."""
+        P = {'arms': pose, 'legs': 'stand', 'phase': 0.0, 'dir': 1, 'fx': [], 'lean': 0.0}
+        if isinstance(pose, dict):
+            P.update(pose)
+        self.P = P
         pen = Pen()
         cx, foot, hip, tb, tt, hcy, hh = self.layout()
         fx = 0.16 * D if view == '3q' else 0.0          # face / chest details shift in 3/4
@@ -210,12 +216,8 @@ class Character:
             pen.poly([(cx - tw * 0.48, tb - 0.2 * D), (cx + tw * 0.48, tb - 0.2 * D), (cx + tw * 0.56, y2),
                       (cx + 0.03 * D, y2), (cx, y2 - 0.05 * D), (cx - 0.03 * D, y2), (cx - tw * 0.56, y2)], ccol, mask='torso')
 
-        # legs: ink sticks from the hips, feet a little apart
-        spread = 0.20 if self.build != 'kid' else 0.14
-        for sx in (-1, 1):
-            pts = bez((cx + sx * 0.10 * D, hip - 0.04 * D), (cx + sx * 0.14 * D, (hip + foot) / 2),
-                      (cx + sx * spread * D, foot))
-            pen.line(pts, LIMB, mask='legs')
+        # legs: ink sticks from the hips (stand / walk / run / tuck), section 3 'Marche'
+        self.legs(pen, cx, hip, foot)
         if skirt:
             length = skirt.get('length', 'knee')
             y2 = hip + (0.5 if length == 'knee' else 0.92) * self.leg * D
@@ -226,7 +228,7 @@ class Character:
             pen.poly(pts, scol, mask='torso')
 
         # back arm
-        self.arm_stroke(pen, cx, tt, tw, +1, pose)
+        self.arm_stroke(pen, cx, tt, tw, +1, P['arms'])
 
         # torso: base garment
         T = egg(cx, tt, tb, tw, self.build)
@@ -240,7 +242,7 @@ class Character:
         self.garments(pen, layers, cx + fx * 0.6, tt, tb, tw, T, band_top)
 
         # front arm
-        self.arm_stroke(pen, cx, tt, tw, -1, pose)
+        self.arm_stroke(pen, cx, tt, tw, -1, P['arms'])
 
         # head
         H = superellipse(cx, hcy, 0.5 * D, hh / 2, 2.15)
@@ -250,31 +252,102 @@ class Character:
         self.draw_face(pen, face or 'neutral', cx + fx, hcy, view)
         self.glasses(pen, cx + fx, hcy)
         self.hat(pen, hat, cx, hcy, hh, fx)
-        pen.poly(H, None, ow=OW * 0.0)  # keep
+        self.effects(pen, cx, hcy, hh)
 
         img = pen.img
         if light:
             img = shade(img, {k: v for k, v in pen.masks.items()}, light, (cx, hcy, tt, tb, hip))
         img = img.resize((CW, CH), Image.LANCZOS)
+        if P['lean']:
+            img = img.rotate(P['lean'] * P['dir'], resample=Image.BICUBIC, center=(cx, foot))
         return img
+
+    # ---------------------------------------------------------------- legs
+    def legs(self, pen, cx, hip, foot):
+        P = self.P
+        spread = 0.20 if self.build != 'kid' else 0.14
+        k = self.leg / 1.3
+        ph = 2 * math.pi * P['phase']
+        dr = P['dir']
+        for i, sx in enumerate((-1, 1)):
+            hx, hy = cx + sx * 0.10 * D, hip - 0.04 * D
+            if P['legs'] in ('walk', 'run'):
+                a = math.sin(ph + (math.pi if i else 0.0))            # -1..1: back .. front
+                amp, lift = (0.30, 0.10) if P['legs'] == 'walk' else (0.55, 0.26)
+                fxp = cx + sx * 0.05 * D + dr * a * amp * k * D
+                fy = foot - max(0.0, math.cos(ph + (math.pi if i else 0.0))) * lift * k * D
+                knee = ((hx + fxp) / 2 + dr * (0.10 if P['legs'] == 'run' else 0.04) * D, (hy + fy) / 2)
+                pts = bez((hx, hy), knee, (fxp, fy))
+            elif P['legs'] == 'tuck':                                # jump: knees up and out
+                fy = foot - 0.30 * k * D
+                pts = bez((hx, hy), (hx + sx * 0.30 * D, (hy + fy) / 2), (hx + sx * 0.10 * D, fy))
+            else:
+                pts = bez((hx, hy), (cx + sx * 0.14 * D, (hip + foot) / 2), (cx + sx * spread * D, foot))
+            pen.line(pts, LIMB, mask='legs')
+
+    # ---------------------------------------------------------------- flat 2D effects (section 6 of ANALYSIS: speed lines, sweat)
+    def effects(self, pen, cx, hcy, hh):
+        fx = self.P.get('fx') or []
+        if 'speed' in fx:
+            for j in range(8):
+                a = math.radians(-160 + j * 20)          # a fan above and around the head
+                r0, r1 = 0.66 * D, (0.95 + 0.08 * (j % 2)) * D
+                p0 = (cx + math.cos(a) * r0, hcy + math.sin(a) * r0 * 0.95)
+                p1 = (cx + math.cos(a) * r1, hcy + math.sin(a) * r1 * 0.95)
+                pen.line([p0, p1], 0.05)
+                pen.line([p0, p1], 0.022, fill='#ffffff')
+        if 'sweat' in fx:
+            for (dx, dy, s) in ((0.52, -0.18, 1.0), (-0.56, -0.05, 0.8)):
+                x, y = cx + dx * D, hcy + dy * D
+                r = 0.06 * D * s
+                drop = [(x, y - 2.2 * r)] + [(x + math.cos(a) * r, y + math.sin(a) * r)
+                                            for a in [math.radians(v) for v in range(-30, 211, 15)]]
+                pen.poly(drop, '#bfe4ff', OW * 0.45)
+                pen.ellipse(x - r * 0.3, y - r * 0.2, r * 0.22, r * 0.22, '#ffffff')
 
     # ---------------------------------------------------------------- arms
     def arm_stroke(self, pen, cx, tt, tw, side, pose):
+        """side +1 = picture-right arm (drawn behind the torso), -1 = picture-left (in front)."""
         sx = cx + side * (tw * 0.40)
         sy = tt + 0.14 * D
         L = self.arm * D
+        P = self.P
+        ph = 2 * math.pi * P.get('phase', 0.0)
+
+        def hand(x, y):
+            pen.ellipse(x, y, 0.075 * D, 0.075 * D, HEAD, OW * 0.65)
+
         if pose == 'akimbo':
-            pts = [(sx, sy), (sx + side * 0.32 * D, sy + 0.32 * D), (sx + side * 0.05 * D, sy + 0.62 * D)]
-            pen.line(pts, LIMB)
+            pen.line([(sx, sy), (sx + side * 0.32 * D, sy + 0.32 * D), (sx + side * 0.05 * D, sy + 0.62 * D)], LIMB)
             return
         if pose == 'wave' and side == -1:
             pts = bez((sx, sy), (sx - 0.45 * D, sy - 0.05 * D), (sx - 0.35 * D, sy - 0.6 * D))
-            pen.line(pts, LIMB)
-            pen.ellipse(*pts[-1], 0.075 * D, 0.075 * D, HEAD, OW * 0.65)
-            return
+            pen.line(pts, LIMB); hand(*pts[-1]); return
+        if pose == 'carry':          # both hands on the sides of a box held at chest height
+            end = (cx + side * 0.50 * D, sy + 0.42 * D)
+            pts = bez((sx, sy), (sx + side * 0.30 * D, sy + 0.30 * D), end)
+            pen.line(pts, LIMB); hand(*end); return
+        if pose == 'down':           # put_down: arms reach low and forward
+            end = (cx + side * 0.46 * D, sy + L * 1.05)
+            pts = bez((sx, sy), (sx + side * 0.32 * D, sy + L * 0.5), end)
+            pen.line(pts, LIMB); hand(*end); return
+        if pose == 'up':             # shock: arms thrown up
+            end = (cx + side * 0.78 * D, sy - 0.55 * D)
+            pts = bez((sx, sy), (sx + side * 0.55 * D, sy + 0.05 * D), end)
+            pen.line(pts, LIMB); hand(*end); return
+        if pose in ('swing', 'run'):  # arms swing opposite to the legs
+            a = math.sin(ph + (0.0 if side < 0 else math.pi))
+            amp = 0.18 if pose == 'swing' else 0.34
+            if pose == 'run':
+                end = (sx + side * 0.10 * D + P['dir'] * a * amp * D, sy + L * 0.55)
+                elbow = (sx + side * 0.28 * D - P['dir'] * a * 0.1 * D, sy + L * 0.42)
+            else:
+                end = (sx + side * 0.13 * D + P['dir'] * a * amp * D, sy + L)
+                elbow = (sx + side * 0.22 * D, sy + L * 0.5)
+            pen.line(bez((sx, sy), elbow, end), LIMB); hand(*end); return
         end = (sx + side * 0.13 * D, sy + L)
         pen.line(bez((sx, sy), (sx + side * 0.22 * D, sy + L * 0.5), end), LIMB)
-        pen.ellipse(end[0], end[1], 0.075 * D, 0.075 * D, HEAD, OW * 0.65)
+        hand(*end)
 
     # ---------------------------------------------------------------- clothes
     def garments(self, pen, layers, cx, tt, tb, tw, T, band_top):

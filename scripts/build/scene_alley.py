@@ -373,7 +373,7 @@ LIGHT = {'dir': tuple(to_light_c), 'key': '#ffd6ad', 'shadow': '#6a6fae', 'floor
 hero = charkit.Character(charkit.load(os.path.join(ROOT, 'characters', 'theo.json')))
 FACE = os.environ.get('FACE', 'fear')
 os.makedirs(os.path.join(ROOT, 'renders', 'tmp'), exist_ok=True)
-char_png = os.path.join(ROOT, 'renders', 'tmp', 'theo_shot.png')
+char_png = os.path.join(ROOT, 'renders', 'tmp', f'theo_shot_{os.getpid()}.png')   # one file per process
 hero.draw(FACE, 'front', LIGHT).save(char_png)
 CARD_H = charkit.CH / charkit.D * UNIT
 FEET = (charkit.CH - (hero.layout()[1])) / charkit.D * UNIT     # feet height above the card's bottom edge
@@ -495,6 +495,35 @@ ls.select_by_collection = True
 ls.collection = char_col
 ls.collection_negation = 'EXCLUSIVE'
 
+# Faster alternative for animation: game-style inverted-hull outlines (OUTLINE=hull), about 2 px near the camera,
+# thinner with distance. Freestyle stays the default for stills.
+if os.environ.get('OUTLINE') == 'hull':
+    scene.render.use_freestyle = False
+    vl.use_freestyle = False
+    ink = bpy.data.materials.new('ink_hull')
+    ink.use_nodes = True
+    _nt = ink.node_tree
+    for _n in list(_nt.nodes):
+        _nt.nodes.remove(_n)
+    _o = _nt.nodes.new('ShaderNodeOutputMaterial'); _e = _nt.nodes.new('ShaderNodeEmission')
+    _e.inputs['Color'].default_value = hexrgb('#1d1b2a'); _nt.links.new(_e.outputs[0], _o.inputs['Surface'])
+    ink.use_backface_culling = True
+    done = set()
+    for o in list(scene.objects):
+        if o.type != 'MESH' or o.name.startswith(('character', 'haze', 'Plane')) or not o.visible_get():
+            continue
+        if o.data.name not in done:
+            if 'ink_hull' not in [m.name for m in o.data.materials if m]:
+                o.data.materials.append(ink)
+            done.add(o.data.name)
+        mod = o.modifiers.new('outline', 'SOLIDIFY')
+        mod.thickness = 0.008
+        mod.offset = 1.0
+        mod.use_flip_normals = True
+        mod.use_rim = False
+        mod.material_offset = len(o.data.materials) - 1
+        o.visible_shadow = o.visible_shadow   # hull also casts nothing extra: keep
+
 # atmosphere: a thin haze so the lamp and the far end glow
 vol = bpy.data.materials.new('haze'); vol.use_nodes = True
 vn = vol.node_tree
@@ -505,8 +534,9 @@ vn.links.new(pv.outputs[0], vn.nodes['Material Output'].inputs['Volume'])
 bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 18, 8))
 hz = bpy.context.active_object; hz.name = 'haze'; hz.scale = (6, 48, 16); hz.data.materials.append(vol)
 
-os.makedirs(os.path.dirname(OUT), exist_ok=True)
-scene.render.filepath = OUT
-scene.render.image_settings.file_format = 'PNG'
-bpy.ops.render.render(write_still=True)
-print('WROTE', OUT)
+if os.environ.get('SCENE_BUILD_ONLY') != '1':      # the film script imports the set and renders itself
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    scene.render.filepath = OUT
+    scene.render.image_settings.file_format = 'PNG'
+    bpy.ops.render.render(write_still=True)
+    print('WROTE', OUT)

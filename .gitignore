@@ -5,3 +5,5 @@ renders/*_raw.png
 renders/tmp/
 __pycache__/
 assets/sketchfab/
+assets/voice/
+renders/test10_frames/
