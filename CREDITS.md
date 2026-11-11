@@ -17,3 +17,5 @@ Everything not listed here was made for this project.
 - Asphalt 02 (`asphalt_02`) by Rob Tuytel - Poly Haven, CC0 - https://polyhaven.com/a/asphalt_02
 - Concrete Pavement 02 (`concrete_pavement_02`) by Charlotte Baglioni - Poly Haven, CC0 - https://polyhaven.com/a/concrete_pavement_02
 - Industrial Sunset 02 (Pure Sky) (`industrial_sunset_02_puresky`) by Jarod Guest, Sergej Majboroda - Poly Haven, CC0 - https://polyhaven.com/a/industrial_sunset_02_puresky
+- "LOWPOLY STYLİZED GHETTO CİTY PACK" by canakdemir - Sketchfab, CC Attribution (https://creativecommons.org/licenses/by/4.0/) - https://sketchfab.com/3d-models/837d0d13a7224ea5a08b1fdc83bef432 (`837d0d13a7224ea5a08b1fdc83bef432`)
+- "PBR Street Props Pack (Game Ready)" by MadeByYeshe - Sketchfab, CC Attribution (https://creativecommons.org/licenses/by/4.0/) - https://sketchfab.com/3d-models/8013d8e6af4645d1a7c3d5b24054bfc8 (`8013d8e6af4645d1a7c3d5b24054bfc8`)

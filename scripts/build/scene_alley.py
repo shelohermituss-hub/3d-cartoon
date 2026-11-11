@@ -144,6 +144,7 @@ def recolor(obj, hexcol, keep_texture=0.25):
     obj.data = obj.data.copy()
     for i, mat in enumerate(obj.data.materials):
         m = mat.copy()
+        m['accent'] = 1
         nt = m.node_tree
         bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
         link = bsdf.inputs['Base Color'].links
@@ -174,14 +175,48 @@ place(P['exterior_aircon_unit']['exterior_aircon_unit_rusted'], (-2.8, 15.0, 7.7
 place(P['water_manhole_cover']['water_manhole_cover_frame'], (0.3, 7.5, 0.0))
 place(P['water_manhole_cover']['water_manhole_cover'], (0.3, 7.5, 0.0))
 place(P['concrete_road_barrier']['concrete_road_barrier'], (-1.4, 18.0, 0), 0.15)
-place(P['fire_hydrant']['fire_hydrant_aged'], (-1.75, 3.3, 0), 0.5, offset=(-0.3, 0, 0))
+hyd = place(P['fire_hydrant']['fire_hydrant_aged'], (-1.25, 3.7, 0), 0.5, offset=(-0.3, 0, 0))
+recolor(hyd, '#3d4842', 0.3)
 for k in ('fire_hydrant_cap_01_aged', 'fire_hydrant_cap_02_aged', 'fire_hydrant_cap_03_aged', 'fire_hydrant_chain_aged'):
-    place(P['fire_hydrant'][k], (-1.75, 3.3, 0), 0.5, offset=(-0.3, 0, 0))
+    recolor(place(P['fire_hydrant'][k], (-1.25, 3.7, 0), 0.5, offset=(-0.3, 0, 0)), '#3d4842', 0.3)
 # fire escape on the left wall, its lowest platform at 3.5 m
 for n, o in P['modular_fire_escape'].items():
     place(o, (-2.35, 11.0, 6.5), -math.pi / 2)
 # street lamp on the left, its arm over the alley
 lamp = place(P['street_lamp_01']['street_lamp_01'], (-2.5, 9.0, 0), -math.pi / 2)
+
+# ---------------------------------------------------------------- Sketchfab props (CC-BY, see CREDITS.md)
+SF = os.path.join(ROOT, 'assets', 'sketchfab')
+
+
+def sf_library(uid):
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=os.path.join(SF, uid, 'scene.gltf'))
+    objs = [o for o in bpy.data.objects if o not in before]
+    col = bpy.data.collections.new('lib_' + uid)
+    for o in objs:
+        for c in o.users_collection:
+            c.objects.unlink(o)
+        col.objects.link(o)
+    bpy.context.view_layer.update()
+    return {o.name.split('.')[0]: o for o in objs if o.type == 'MESH'}
+
+
+SP = sf_library('8013d8e6af4645d1a7c3d5b24054bfc8')
+# accent: the big dumpster, repainted the scene's one vivid colour (#3c56a6), standing in the sun
+for n in ('Object_80', 'Object_82'):
+    o = place(SP[n], (1.75, 6.6, 0), math.pi / 2, offset=(-0.265, -3.725, 0))
+    recolor(o, '#3c56a6' if n == 'Object_80' else '#2c3f80', 0.3)
+for n, (x, y, r) in (('Object_58', (2.5, 5.2, 0.4)), ('Object_60', (2.2, 4.7, 1.2)), ('Object_66', (0.9, 7.3, 0.2))):
+    o = SP[n]
+    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+    cxy = ((min(v.x for v in bb) + max(v.x for v in bb)) / 2, (min(v.y for v in bb) + max(v.y for v in bb)) / 2)
+    place(o, (x, y, 0), r, offset=(-cxy[0], -cxy[1], 0))
+for n in ('Object_44', 'Object_48'):   # two bollards
+    o = SP[n]
+    bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+    cxy = ((min(v.x for v in bb) + max(v.x for v in bb)) / 2, (min(v.y for v in bb) + max(v.y for v in bb)) / 2)
+    place(o, (-2.55, 7.5 if n == 'Object_44' else 9.3, 0), 0, offset=(-cxy[0], -cxy[1], 0))
 
 # ---------------------------------------------------------------- ground
 def ground_mat():
@@ -278,8 +313,8 @@ scene.camera = cam
 cam.data.lens = 27
 cam.data.sensor_fit = 'VERTICAL'
 cam.data.sensor_height = 36
-cam.location = (-1.35, 1.95, 1.4)
-target = Vector((-0.45, 4.6, 0.98))
+cam.location = (-1.35, 1.2, 1.35)
+target = Vector((-0.4, 4.6, 0.9))
 cam.rotation_euler = (target - cam.location).to_track_quat('-Z', 'Y').to_euler()
 
 # ---------------------------------------------------------------- light: warm key + cool fill
@@ -287,9 +322,9 @@ cam.rotation_euler = (target - cam.location).to_track_quat('-Z', 'Y').to_euler()
 sun = bpy.data.objects.new('sun', bpy.data.lights.new('sun', 'SUN'))
 scene.collection.objects.link(sun)
 sun.data.color = hexrgb('#ffb47a')[:3]
-sun.data.energy = 3.2
+sun.data.energy = 8.0
 sun.data.angle = math.radians(2.5)
-sun.rotation_euler = Euler((math.radians(-63), 0, math.radians(-5)))
+sun.rotation_euler = Euler((math.radians(-67), 0, math.radians(-4)))
 sun_dir = sun.matrix_world.to_quaternion() @ Vector((0, 0, -1))   # direction light travels
 
 # cool fill: the sky
@@ -303,11 +338,11 @@ wn.links.new(tc.outputs['Generated'], nrm.inputs[0]); wn.links.new(nrm.outputs[0
 ramp = wn.nodes.new('ShaderNodeValToRGB')
 cr = ramp.color_ramp
 cr.elements[0].position = 0.0; cr.elements[0].color = hexrgb('#e4ae85')
-cr.elements[1].position = 0.55; cr.elements[1].color = hexrgb('#352c3f')
+cr.elements[1].position = 0.9; cr.elements[1].color = hexrgb('#352c3f')
 e = cr.elements.new(0.12); e.color = hexrgb('#d99a8a')
 e = cr.elements.new(0.3); e.color = hexrgb('#7d6390')
 wn.links.new(sep.outputs['Z'], ramp.inputs['Fac'])
-bg = wn.nodes['Background']; bg.inputs['Strength'].default_value = 1.0
+bg = wn.nodes['Background']; bg.inputs['Strength'].default_value = 0.22
 wn.links.new(ramp.outputs['Color'], bg.inputs['Color'])
 scene.world = world
 
@@ -324,7 +359,75 @@ scene.collection.objects.link(spill)
 spill.data.color = hexrgb('#f0c060')[:3]; spill.data.energy = 120; spill.data.size = 1.5
 spill.location = (-2.6, 3.4, 2.2); spill.rotation_euler = (0, math.radians(-80), 0)
 
-char = billboard(os.path.join(CHAR, 'courier_neutral.png'), (-0.55, 4.6, 0.0), 1.85, cam, sun_dir)
+char = billboard(os.path.join(CHAR, 'courier_tired.png'), (-0.55, 4.6, 0.0), 1.6, cam, sun_dir)
+
+# ---------------------------------------------------------------- toon shading of the set
+# Cel-leaning look of the references: flat colour shapes, one clear shadow edge, cool shade / warm light,
+# texture detail reduced to a "painted" hint. The flat character and the glowing windows are left alone.
+import numpy as np
+AVG = {}
+
+
+def image_average(img):
+    if img.name not in AVG:
+        n = img.size[0] * img.size[1] * img.channels
+        a = np.empty(n, dtype=np.float32)
+        img.pixels.foreach_get(a)
+        AVG[img.name] = tuple(a.reshape(-1, img.channels)[:, :3].mean(0)) + (1.0,)
+    return AVG[img.name]
+
+
+def toonify(m):
+    nt = m.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+    out = next((n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+    if bsdf is None or out is None:
+        return
+    if bsdf.inputs['Emission Strength'].default_value > 0 and bsdf.inputs['Emission Color'].default_value[0] > 0.5:
+        return
+    bl = bsdf.inputs['Base Color'].links
+    base = bl[0].from_socket if bl else None
+    # flatten the texture: 50 % towards its own average colour
+    flat = nt.nodes.new('ShaderNodeMix'); flat.data_type = 'RGBA'
+    flat.inputs['Factor'].default_value = 0.0 if m.get('accent') else 0.5
+    tex = next((n for n in nt.nodes if n.type == 'TEX_IMAGE' and n.image and n.image.colorspace_settings.name != 'Non-Color'), None)
+    if base is not None:
+        nt.links.new(base, flat.inputs[6])
+        flat.inputs[7].default_value = image_average(tex.image) if tex else (0.5, 0.5, 0.5, 1)
+    else:
+        flat.inputs[6].default_value = bsdf.inputs['Base Color'].default_value
+        flat.inputs[7].default_value = bsdf.inputs['Base Color'].default_value
+    sat = nt.nodes.new('ShaderNodeHueSaturation'); sat.inputs['Saturation'].default_value = 1.2
+    nt.links.new(flat.outputs[2], sat.inputs['Color'])
+    # light received, as a colour
+    dif = nt.nodes.new('ShaderNodeBsdfDiffuse'); dif.inputs['Color'].default_value = (1, 1, 1, 1)
+    nl = bsdf.inputs['Normal'].links
+    if nl:
+        nt.links.new(nl[0].from_socket, dif.inputs['Normal'])
+    s2r = nt.nodes.new('ShaderNodeShaderToRGB'); nt.links.new(dif.outputs[0], s2r.inputs[0])
+    bw = nt.nodes.new('ShaderNodeRGBToBW'); nt.links.new(s2r.outputs['Color'], bw.inputs[0])
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); r = ramp.color_ramp; r.interpolation = 'EASE'
+    r.elements[0].position = 0.0; r.elements[0].color = (0.13, 0.12, 0.24, 1)     # deep cool shade
+    r.elements[1].position = 0.9; r.elements[1].color = (1.25, 1.02, 0.80, 1)    # warm sunlight
+    e = r.elements.new(0.18); e.color = (0.24, 0.21, 0.38, 1)                       # shade
+    e = r.elements.new(0.42); e.color = (0.40, 0.34, 0.52, 1)                       # shadow edge starts
+    e = r.elements.new(0.50); e.color = (1.0, 0.82, 0.66, 1)                        # ... and ends: a clear edge
+    nt.links.new(bw.outputs[0], ramp.inputs['Fac'])
+    m1 = nt.nodes.new('ShaderNodeMix'); m1.data_type = 'RGBA'; m1.blend_type = 'MULTIPLY'; m1.inputs['Factor'].default_value = 1
+    nt.links.new(sat.outputs[0], m1.inputs[6]); nt.links.new(ramp.outputs['Color'], m1.inputs[7])
+    # local coloured light (lamp, door spill, windows) on top
+    m2 = nt.nodes.new('ShaderNodeMix'); m2.data_type = 'RGBA'; m2.blend_type = 'MULTIPLY'; m2.inputs['Factor'].default_value = 1
+    nt.links.new(sat.outputs[0], m2.inputs[6]); nt.links.new(s2r.outputs['Color'], m2.inputs[7])
+    add = nt.nodes.new('ShaderNodeMix'); add.data_type = 'RGBA'; add.blend_type = 'ADD'; add.inputs['Factor'].default_value = 0.35
+    nt.links.new(m1.outputs[2], add.inputs[6]); nt.links.new(m2.outputs[2], add.inputs[7])
+    em = nt.nodes.new('ShaderNodeEmission'); nt.links.new(add.outputs[2], em.inputs['Color'])
+    nt.links.new(em.outputs[0], out.inputs['Surface'])
+
+
+SKIP = ('window_warm', 'char_flat', 'haze')
+for m in bpy.data.materials:
+    if m.node_tree and not m.name.startswith(SKIP):
+        toonify(m)
 
 # ---------------------------------------------------------------- render settings
 scene.render.engine = 'BLENDER_EEVEE'
@@ -354,8 +457,8 @@ if ls.linestyle is None:
 ls.select_by_visibility = True
 ls.select_silhouette = True; ls.select_border = True; ls.select_crease = True
 ls.linestyle.color = hexrgb('#1d1b2a')[:3]
-ls.linestyle.alpha = 0.8
-ls.linestyle.thickness = 1.6 * SCALE
+ls.linestyle.alpha = 1.0
+ls.linestyle.thickness = 2.2 * SCALE
 # the character is drawn already: keep Freestyle off it
 char_col = bpy.data.collections.new('flat'); scene.collection.children.link(char_col)
 for o in bpy.data.objects:
@@ -371,7 +474,7 @@ ls.collection_negation = 'EXCLUSIVE'
 vol = bpy.data.materials.new('haze'); vol.use_nodes = True
 vn = vol.node_tree
 vn.nodes.remove(vn.nodes['Principled BSDF'])
-pv = vn.nodes.new('ShaderNodeVolumePrincipled'); pv.inputs['Density'].default_value = 0.012
+pv = vn.nodes.new('ShaderNodeVolumePrincipled'); pv.inputs['Density'].default_value = 0.004
 pv.inputs['Color'].default_value = hexrgb('#b9a7c9')
 vn.links.new(pv.outputs[0], vn.nodes['Material Output'].inputs['Volume'])
 bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 18, 8))

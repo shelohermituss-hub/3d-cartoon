@@ -46,11 +46,13 @@ def write_ass(chunks, path):
 
 
 # Bloom: keep only the brightest parts, blur them (about 30 px), add them back with "screen".
+# Grade: an S-curve that deepens the shadows (dark base 20 - 35 % of the frame, section 4).
 # Vignette: corners about 15 % darker than the centre.
 POST = ("format=gbrp,split[a][b];"
         "[b]lutrgb=r='if(gt(val,205),(val-205)*4,0)':g='if(gt(val,205),(val-205)*4,0)':b='if(gt(val,205),(val-205)*4,0)',"
         "gblur=sigma=14[g];"
         "[a][g]blend=all_mode=screen:all_opacity=0.55,"
+        "curves=all='0/0 0.18/0.115 0.4/0.33 0.7/0.68 1/1',"
         "vignette=angle=0.3:mode=forward,format=yuv444p")
 
 
