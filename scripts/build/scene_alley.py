@@ -175,10 +175,10 @@ place(P['exterior_aircon_unit']['exterior_aircon_unit_rusted'], (-2.8, 15.0, 7.7
 place(P['water_manhole_cover']['water_manhole_cover_frame'], (0.3, 7.5, 0.0))
 place(P['water_manhole_cover']['water_manhole_cover'], (0.3, 7.5, 0.0))
 place(P['concrete_road_barrier']['concrete_road_barrier'], (-1.4, 18.0, 0), 0.15)
-hyd = place(P['fire_hydrant']['fire_hydrant_aged'], (-1.25, 3.7, 0), 0.5, offset=(-0.3, 0, 0))
+hyd = place(P['fire_hydrant']['fire_hydrant_aged'], (-1.06, 4.4, 0), 0.5, offset=(-0.3, 0, 0))
 recolor(hyd, '#3d4842', 0.3)
 for k in ('fire_hydrant_cap_01_aged', 'fire_hydrant_cap_02_aged', 'fire_hydrant_cap_03_aged', 'fire_hydrant_chain_aged'):
-    recolor(place(P['fire_hydrant'][k], (-1.25, 3.7, 0), 0.5, offset=(-0.3, 0, 0)), '#3d4842', 0.3)
+    recolor(place(P['fire_hydrant'][k], (-1.06, 4.4, 0), 0.5, offset=(-0.3, 0, 0)), '#3d4842', 0.3)
 # fire escape on the left wall, its lowest platform at 3.5 m
 for n, o in P['modular_fire_escape'].items():
     place(o, (-2.35, 11.0, 6.5), -math.pi / 2)
@@ -276,7 +276,7 @@ def billboard(img_path, foot, height, cam_obj, sun_dir):
     nt.links.new(tx.outputs['Alpha'], mix.inputs['Fac'])
     nt.links.new(tr.outputs[0], mix.inputs[1]); nt.links.new(em.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], out.inputs['Surface'])
-    m.surface_render_method = 'BLENDED' if hasattr(m, 'surface_render_method') else None
+    m.surface_render_method = 'DITHERED'   # writes depth: the depth of field keeps the character sharp
     m.use_transparent_shadow = True
 
     def plane(name):
@@ -310,12 +310,14 @@ def billboard(img_path, foot, height, cam_obj, sun_dir):
 cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
 scene.collection.objects.link(cam)
 scene.camera = cam
-cam.data.lens = 27
+cam.data.lens = 18 / math.tan(math.radians(14))   # 28 deg vertical field
 cam.data.sensor_fit = 'VERTICAL'
 cam.data.sensor_height = 36
-cam.location = (-1.35, 1.2, 1.35)
-target = Vector((-0.4, 4.6, 0.9))
+cam.location = (-0.85, 1.75, 0.9)
+target = Vector((-0.55, 6.0, 0.95))
 cam.rotation_euler = (target - cam.location).to_track_quat('-Z', 'Y').to_euler()
+ROLL = math.radians(3.0)
+cam.rotation_euler = (cam.rotation_euler.to_quaternion() @ __import__('mathutils').Quaternion((0, 0, 1), ROLL)).to_euler()
 
 # ---------------------------------------------------------------- light: warm key + cool fill
 # key: low golden sun from the far end of the alley, upper left -> lights the right wall tops, long shadows toward camera
@@ -323,9 +325,10 @@ sun = bpy.data.objects.new('sun', bpy.data.lights.new('sun', 'SUN'))
 scene.collection.objects.link(sun)
 sun.data.color = hexrgb('#ffb47a')[:3]
 sun.data.energy = 8.0
-sun.data.angle = math.radians(2.5)
-sun.rotation_euler = Euler((math.radians(-67), 0, math.radians(-4)))
-sun_dir = sun.matrix_world.to_quaternion() @ Vector((0, 0, -1))   # direction light travels
+sun.data.angle = math.radians(0.6)
+_e, _a = math.radians(26), math.radians(5)
+sun.rotation_euler = Vector((-math.sin(_a) * math.cos(_e), math.cos(_a) * math.cos(_e), -math.sin(_e))).to_track_quat('-Z', 'Y').to_euler()
+sun_dir = sun.rotation_euler.to_quaternion() @ Vector((0, 0, -1))   # direction light travels
 
 # cool fill: the sky
 world = bpy.data.worlds.new('dusk')
@@ -359,7 +362,26 @@ scene.collection.objects.link(spill)
 spill.data.color = hexrgb('#f0c060')[:3]; spill.data.energy = 120; spill.data.size = 1.5
 spill.location = (-2.6, 3.4, 2.2); spill.rotation_euler = (0, math.radians(-80), 0)
 
-char = billboard(os.path.join(CHAR, 'courier_tired.png'), (-0.55, 4.6, 0.0), 1.6, cam, sun_dir)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import charkit
+UNIT = 0.42                                   # 1 unit = head width = 0.42 m
+bpy.context.view_layer.update()
+to_light_w = -sun_dir
+to_light_c = cam.rotation_euler.to_quaternion().inverted() @ to_light_w    # camera space: x right, y up, z to camera
+LIGHT = {'dir': tuple(to_light_c), 'key': '#ffd6ad', 'shadow': '#6a6fae', 'floor': 0.45, 'rim': 0.5,
+         'hardness': 0.03, 'headShadow': 0.45}
+hero = charkit.Character(charkit.load(os.path.join(ROOT, 'characters', 'theo.json')))
+FACE = os.environ.get('FACE', 'fear')
+os.makedirs(os.path.join(ROOT, 'renders', 'tmp'), exist_ok=True)
+char_png = os.path.join(ROOT, 'renders', 'tmp', 'theo_shot.png')
+hero.draw(FACE, 'front', LIGHT).save(char_png)
+CARD_H = charkit.CH / charkit.D * UNIT
+FEET = (charkit.CH - (hero.layout()[1])) / charkit.D * UNIT     # feet height above the card's bottom edge
+char = billboard(char_png, (-0.55, 6.0, -FEET), CARD_H, cam, sun_dir)
+# depth of field (section 6): focus on the character, the set behind softens, the character stays sharp
+cam.data.dof.use_dof = True
+cam.data.dof.focus_distance = (Vector((-0.55, 6.0, 1.0)) - cam.location).length
+cam.data.dof.aperture_fstop = 5.6
 
 # ---------------------------------------------------------------- toon shading of the set
 # Cel-leaning look of the references: flat colour shapes, one clear shadow edge, cool shade / warm light,
@@ -438,7 +460,7 @@ scene.render.fps = 30
 ee = scene.eevee
 ee.taa_render_samples = SAMPLES
 for attr, val in (('use_raytracing', True), ('use_shadows', True), ('shadow_ray_count', 2), ('shadow_step_count', 8),
-                  ('use_volumetric_shadows', True), ('volumetric_tile_size', '8')):
+                  ('use_volumetric_shadows', False), ('volumetric_tile_size', '8')):
     if hasattr(ee, attr):
         setattr(ee, attr, val)
 scene.view_settings.view_transform = 'Standard'
@@ -459,6 +481,9 @@ ls.select_silhouette = True; ls.select_border = True; ls.select_crease = True
 ls.linestyle.color = hexrgb('#1d1b2a')[:3]
 ls.linestyle.alpha = 1.0
 ls.linestyle.thickness = 2.2 * SCALE
+# ink lines fade with distance so they never sit sharp on a blurred background
+_am = ls.linestyle.alpha_modifiers.new('fade', 'DISTANCE_FROM_CAMERA')
+_am.range_min = 6.0; _am.range_max = 18.0; _am.mapping = 'LINEAR'; _am.invert = True
 # the character is drawn already: keep Freestyle off it
 char_col = bpy.data.collections.new('flat'); scene.collection.children.link(char_col)
 for o in bpy.data.objects:
@@ -474,7 +499,7 @@ ls.collection_negation = 'EXCLUSIVE'
 vol = bpy.data.materials.new('haze'); vol.use_nodes = True
 vn = vol.node_tree
 vn.nodes.remove(vn.nodes['Principled BSDF'])
-pv = vn.nodes.new('ShaderNodeVolumePrincipled'); pv.inputs['Density'].default_value = 0.004
+pv = vn.nodes.new('ShaderNodeVolumePrincipled'); pv.inputs['Density'].default_value = float(os.environ.get('HAZE', '0.004'))
 pv.inputs['Color'].default_value = hexrgb('#b9a7c9')
 vn.links.new(pv.outputs[0], vn.nodes['Material Output'].inputs['Volume'])
 bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 18, 8))

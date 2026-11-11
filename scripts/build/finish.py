@@ -45,13 +45,13 @@ def write_ass(chunks, path):
             f.write(f'Dialogue: 0,{ts(a)},{ts(b)},Cap,,0,0,0,,{{\\an5\\pos(540,1350)}}{txt}\n')
 
 
-# Bloom: keep only the brightest parts, blur them (about 30 px), add them back with "screen".
+# Glow (STYLE_NEW section 6): 0.3 above 0.75 of full brightness, blurred about 30 px, added with "screen".
 # Grade: an S-curve that deepens the shadows (dark base 20 - 35 % of the frame, section 4).
 # Vignette: corners about 15 % darker than the centre.
 POST = ("format=gbrp,split[a][b];"
-        "[b]lutrgb=r='if(gt(val,205),(val-205)*4,0)':g='if(gt(val,205),(val-205)*4,0)':b='if(gt(val,205),(val-205)*4,0)',"
+        "[b]lutrgb=r='if(gt(val,191),(val-191)*4,0)':g='if(gt(val,191),(val-191)*4,0)':b='if(gt(val,191),(val-191)*4,0)',"
         "gblur=sigma=14[g];"
-        "[a][g]blend=all_mode=screen:all_opacity=0.55,"
+        "[a][g]blend=all_mode=screen:all_opacity=0.3,"
         "curves=all='0/0 0.18/0.115 0.4/0.33 0.7/0.68 1/1',"
         "vignette=angle=0.3:mode=forward,format=yuv444p")
 

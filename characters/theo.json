@@ -1,0 +1,19 @@
+{
+  "name": "Théo",
+  "sentence": "Coursier de 25 ans, mince et grand, veste olive sur chemise claire, écharpe et bonnet orange vif (sa couleur), sacoche en bandoulière.",
+  "role": "hero",
+  "torso": {"body": {"build": "slim"}},
+  "limbs": {"legLen": 1.42, "armLen": 0.95},
+  "outfit": {
+    "layers": [
+      {"kind": "shirt", "color": "#e9e6df"},
+      {"kind": "jacket", "color": "#56694a"},
+      {"kind": "scarf", "color": "#e0662a"},
+      {"kind": "bag_strap", "color": "#7a5236"}
+    ],
+    "trousers": "#2b2f3d"
+  },
+  "hair": {"style": "short", "color": "#3b2a22"},
+  "hat": {"kind": "beanie", "color": "#e0662a"},
+  "face": {"eyeSize": 1.0, "browThick": 1.4, "eyeGap": 1.0, "mouthWidth": 1.0}
+}

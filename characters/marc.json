@@ -1,0 +1,18 @@
+{
+  "name": "Marc",
+  "sentence": "Épicier de 50 ans, trapu, pull moutarde (sa couleur) et tablier, front dégarni, moustache en guidon.",
+  "role": "extra",
+  "torso": {"body": {"build": "stout"}},
+  "limbs": {"legLen": 1.15, "armLen": 0.95},
+  "outfit": {
+    "layers": [
+      {"kind": "sweater", "color": "#c9962c"},
+      {"kind": "apron", "color": "#dcd6c8"}
+    ],
+    "trousers": "#3a3a46"
+  },
+  "hair": {"style": "receding", "color": "#2a211c"},
+  "facialHair": {"kind": "handlebar"},
+  "hat": {"kind": "none"},
+  "face": {"eyeSize": 0.97, "browThick": 1.5, "eyeGap": 1.05, "mouthWidth": 1.1}
+}
